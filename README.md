@@ -57,6 +57,11 @@ Edit the generated `config.json` file:
 user-behavior-simulator
 ```
 
+### Run Only Filesystem Exploration
+```bash
+user-behavior-simulator --task browse_filesystem
+```
+
 ## ⚙️ Configuration Examples
 
 ### Basic Web Browsing
