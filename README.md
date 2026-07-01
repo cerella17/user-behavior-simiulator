@@ -18,11 +18,13 @@ A comprehensive cross-platform Python tool that simulates realistic human comput
 ## 📦 Installation
 
 ### From PyPI
+
 ```bash
 pip install user-behavior-simulator
 ```
 
 ### From Source
+
 ```bash
 git clone https://github.com/username/user-behavior-simulator.git
 cd user-behavior-simulator
@@ -32,32 +34,37 @@ pip install -e .
 ## 🚀 Quick Start
 
 ### 1. Create Configuration
+
 ```bash
 user-behavior-simulator --create-config
 ```
 
 ### 2. Edit Configuration
+
 Edit the generated `config.json` file:
+
 ```json
 {
-    "websites": ["https://example.com"],
-    "active_hours": {
-        "enabled": true,
-        "start_hour": 9,
-        "end_hour": 17
-    },
-    "page_interaction": {
-        "scroll_enabled": true
-    }
+  "websites": ["https://example.com"],
+  "active_hours": {
+    "enabled": true,
+    "start_hour": 9,
+    "end_hour": 17
+  },
+  "page_interaction": {
+    "scroll_enabled": true
+  }
 }
 ```
 
 ### 3. Run Simulator
+
 ```bash
 user-behavior-simulator
 ```
 
 ### Run Only Filesystem Exploration
+
 ```bash
 user-behavior-simulator --task browse_filesystem
 ```
@@ -65,46 +72,44 @@ user-behavior-simulator --task browse_filesystem
 ## ⚙️ Configuration Examples
 
 ### Basic Web Browsing
+
 ```json
 {
-    "websites": [
-        "https://www.reddit.com",
-        "https://news.ycombinator.com"
-    ],
-    "links_per_website": [3, 7],
-    "page_interaction": {
-        "scroll_enabled": true,
-        "scroll_patterns": ["top_to_bottom", "random_sections"]
-    }
+  "websites": ["https://www.reddit.com", "https://news.ycombinator.com"],
+  "links_per_website": [3, 7],
+  "page_interaction": {
+    "scroll_enabled": true,
+    "scroll_patterns": ["top_to_bottom", "random_sections"]
+  }
 }
 ```
 
 ### Network Operations
+
 ```json
 {
-    "ip_range": {
-        "enabled": true,
-        "start_ip": "192.168.1.100",
-        "end_ip": "192.168.1.200"
-    },
-    "smtp_config": {
-        "enabled": true,
-        "server": "smtp.gmail.com",
-        "recipients": ["test@example.com"]
-    }
+  "ip_range": {
+    "enabled": true,
+    "start_ip": "192.168.1.100",
+    "end_ip": "192.168.1.200"
+  },
+  "smtp_config": {
+    "enabled": true,
+    "server": "smtp.gmail.com",
+    "recipients": ["test@example.com"]
+  }
 }
 ```
 
 ### Application Execution
+
 ```json
 {
-    "app_execution": {
-        "enabled": true,
-        "apps_per_session": [1, 3],
-        "windows_apps": [
-            {"type": "command", "command": "notepad.exe", "name": "Notepad"}
-        ]
-    }
+  "app_execution": {
+    "enabled": true,
+    "apps_per_session": [1, 3],
+    "windows_apps": [{ "type": "command", "command": "notepad.exe", "name": "Notepad" }]
+  }
 }
 ```
 
@@ -117,11 +122,13 @@ user-behavior-simulator --task browse_filesystem
 ## 🌐 Network Features
 
 ### File Sharing
+
 - Cross-platform network file transfers
 - IP range scanning and availability checking
 - Retry logic with fallback mechanisms
 
 ### Protocol Support
+
 - **HTTP/HTTPS** - Web browsing with realistic interaction
 - **FTP** - File upload/download operations
 - **SMTP** - Email sending with attachments
@@ -143,6 +150,7 @@ pip install requests pyautogui paramiko
 ## 🔧 Usage
 
 ### Command Line
+
 ```bash
 # Basic usage
 user-behavior-simulator
@@ -155,6 +163,7 @@ user-behavior-simulator --create-config
 ```
 
 ### Python API
+
 ```python
 from user_behavior_simulator import UserBehaviorSimulator
 
@@ -205,6 +214,7 @@ This software is provided for educational and testing purposes. Users are respon
 ## 🐛 Issue Reporting
 
 Found a bug? Please [create an issue](https://github.com/username/user-behavior-simulator/issues) with:
+
 - Operating system and version
 - Python version
 - Configuration file (remove sensitive data)
