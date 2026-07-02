@@ -188,10 +188,35 @@ class SandboxOrchestrator:
         return float(default_low), float(default_high)
 
     def _build_module_dispatch(self):
+        def dispatch_with_budget(module_name: str):
+            duration_minutes = self._pick_module_duration_minutes()
+            return self.simulator.run_module_for_duration(module_name, duration_minutes)
+
         return {
-            "browse_websites": lambda: self.simulator.browse_websites(skip_post_wait=True),
-            "browse_filesystem": lambda: self.simulator.browse_filesystem(skip_post_wait=True),
+            "browse_websites": lambda: dispatch_with_budget("browse_websites"),
+            "browse_filesystem": lambda: dispatch_with_budget("browse_filesystem"),
         }
+
+    def _module_duration_range(self) -> Tuple[int, int]:
+        sandbox_range = self.config.get("module_duration_minutes")
+        task_orchestration_range = (
+            self.simulator.config.get("task_orchestration", {}) or {}
+        ).get("module_duration_minutes", [1, 3])
+        configured = sandbox_range if sandbox_range is not None else task_orchestration_range
+
+        if isinstance(configured, (list, tuple)) and len(configured) == 2:
+            try:
+                min_minutes = max(1, int(configured[0]))
+                max_minutes = max(min_minutes, int(configured[1]))
+                return min_minutes, max_minutes
+            except Exception:
+                pass
+
+        return 1, 3
+
+    def _pick_module_duration_minutes(self) -> int:
+        min_minutes, max_minutes = self._module_duration_range()
+        return random.randint(min_minutes, max_minutes)
 
     def start(self):
         if psutil is None:

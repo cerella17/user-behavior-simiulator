@@ -40,6 +40,39 @@ class UserBehaviorSimulator:
         self.threads = []
         self.current_os = None
         self.hotkey_listener = None
+        self.module_stop_requested = False
+
+    def _should_stop_current_module(self, run_until=None):
+        if not self.is_running:
+            return True
+        if self.module_stop_requested:
+            return True
+        if run_until is not None and time.time() >= run_until:
+            return True
+        return False
+
+    def _sleep_interruptible(self, seconds, run_until=None):
+        remaining = max(0.0, float(seconds))
+        while remaining > 0:
+            if self._should_stop_current_module(run_until=run_until):
+                break
+
+            step = min(0.2, remaining)
+            if run_until is not None:
+                deadline_left = run_until - time.time()
+                if deadline_left <= 0:
+                    break
+                step = min(step, deadline_left)
+
+            if step <= 0:
+                break
+
+            _ORIGINAL_SLEEP(step)
+            remaining -= step
+
+    def _request_web_module_stop(self):
+        self.module_stop_requested = True
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Web module time limit reached, stopping current execution")
 
     def load_config(self, config_file):
         if os.path.exists(config_file):
@@ -210,7 +243,10 @@ class UserBehaviorSimulator:
         self.hotkey_listener = listener
         return listener
 
-    def sleep_with_mouse_activity(self, seconds):
+    def sleep_with_mouse_activity(self, seconds, run_until=None):
+        if self._should_stop_current_module(run_until=run_until):
+            return
+
         duration = max(
             self.scale_duration(seconds),
             min(1.8, max(0.7, float(seconds) * 0.25))
@@ -218,6 +254,12 @@ class UserBehaviorSimulator:
 
         if duration <= 0:
             return
+
+        if run_until is not None:
+            remaining = run_until - time.time()
+            if remaining <= 0:
+                return
+            duration = min(duration, remaining)
 
         try:
             import pyautogui
@@ -228,7 +270,8 @@ class UserBehaviorSimulator:
             movement_probability = max(0.0, min(1.0, movement_probability))
             end_time = time.time() + duration
 
-            while time.time() < end_time and self.is_running:
+            while time.time() < end_time and not self._should_stop_current_module(run_until=run_until):
+
                 remaining = end_time - time.time()
                 if remaining <= 0:
                     break
@@ -245,16 +288,19 @@ class UserBehaviorSimulator:
                         tween=pyautogui.easeInOutQuad,
                     )
 
-                _ORIGINAL_SLEEP(step)
+                self._sleep_interruptible(step, run_until=run_until)
 
         except ImportError:
-            _ORIGINAL_SLEEP(self.scale_duration(seconds))
+            self._sleep_interruptible(duration, run_until=run_until)
         except Exception:
-            _ORIGINAL_SLEEP(self.scale_duration(seconds))
+            self._sleep_interruptible(duration, run_until=run_until)
 
-    def maybe_close_current_tab(self, opened_new_tab=False):
+    def maybe_close_current_tab(self, opened_new_tab=False, run_until=None):
         close_probability = float(self.config.get('close_tab_probability', 0.25) or 0.25)
         close_probability = max(0.0, min(1.0, close_probability))
+
+        if run_until is not None and time.time() >= run_until:
+            return
 
         print(
             f"[{datetime.now().strftime('%H:%M:%S')}] Tab close check: opened_new_tab={opened_new_tab}, close_probability={close_probability:.2f}"
@@ -293,7 +339,7 @@ class UserBehaviorSimulator:
                 except Exception as fallback_error:
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] AppleScript close fallback failed: {fallback_error}")
 
-            self.sleep_with_mouse_activity(0.8)
+            self.sleep_with_mouse_activity(0.8, run_until=run_until)
 
         except Exception:
             pass
@@ -982,7 +1028,7 @@ class UserBehaviorSimulator:
         else:
             return self.get_desktop_path()
 
-    def extract_links_from_page(self, url):
+    def extract_links_from_page(self, url, run_until=None):
         try:
             from urllib.parse import urljoin, urlparse
 
@@ -990,7 +1036,17 @@ class UserBehaviorSimulator:
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
 
-            response = requests.get(url, headers=headers, timeout=10)
+            if self._should_stop_current_module(run_until=run_until):
+                return []
+
+            request_timeout = 10.0
+            if run_until is not None:
+                remaining = run_until - time.time()
+                if remaining <= 0:
+                    return []
+                request_timeout = max(0.5, min(request_timeout, remaining))
+
+            response = requests.get(url, headers=headers, timeout=request_timeout)
             if response.status_code != 200:
                 return []
 
@@ -1035,6 +1091,9 @@ class UserBehaviorSimulator:
 
             valid_links = []
             for link in links:
+                if self._should_stop_current_module(run_until=run_until):
+                    break
+
                 if not link or link.startswith('#') or link.startswith('javascript:'):
                     continue
 
@@ -1165,7 +1224,7 @@ class UserBehaviorSimulator:
         except Exception as e:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Scrolling error: {e}")
 
-    def interact_with_search_bar(self, query_override=None):
+    def interact_with_search_bar(self, query_override=None, run_until=None):
         search_config = self.config.get('search_interaction', {})
 
         if not search_config.get('enabled', False):
@@ -1181,7 +1240,16 @@ class UserBehaviorSimulator:
         else:
             wait_time = 3
 
+        if run_until is not None:
+            remaining = run_until - time.time()
+            if remaining <= 0:
+                return
+            wait_time = min(wait_time, remaining)
+
         time.sleep(wait_time)
+
+        if run_until is not None and time.time() >= run_until:
+            return
 
         try:
             import pyautogui
@@ -1192,7 +1260,13 @@ class UserBehaviorSimulator:
             search_url = str(search_config.get('search_url', 'https://www.google.com/')).strip()
             if search_url:
                 webbrowser.open_new_tab(search_url)
-                time.sleep(random.uniform(1.5, 3.0))
+                if run_until is not None:
+                    remaining = run_until - time.time()
+                    if remaining <= 0:
+                        return
+                    time.sleep(min(random.uniform(1.5, 3.0), remaining))
+                else:
+                    time.sleep(random.uniform(1.5, 3.0))
 
             if platform.system() == "Darwin":
                 browser_names = ['Firefox', 'Google Chrome', 'Safari', 'Brave Browser', 'Opera']
@@ -1203,7 +1277,13 @@ class UserBehaviorSimulator:
                         result = subprocess.run(['open', '-a', browser_name], capture_output=True, text=True, timeout=5)
                         if result.returncode == 0:
                             browser_activated = True
-                            time.sleep(1)
+                            if run_until is not None:
+                                remaining = run_until - time.time()
+                                if remaining <= 0:
+                                    return
+                                time.sleep(min(1, remaining))
+                            else:
+                                time.sleep(1)
                             break
                     except Exception:
                         continue
@@ -1211,7 +1291,13 @@ class UserBehaviorSimulator:
                 if not browser_activated:
                     try:
                         pyautogui.hotkey('command', 'tab')
-                        time.sleep(1)
+                        if run_until is not None:
+                            remaining = run_until - time.time()
+                            if remaining <= 0:
+                                return
+                            time.sleep(min(1, remaining))
+                        else:
+                            time.sleep(1)
                     except Exception:
                         pass
 
@@ -1239,7 +1325,13 @@ class UserBehaviorSimulator:
 
             def click_search_field(target_x, target_y):
                 pyautogui.click(target_x, target_y)
-                time.sleep(0.2)
+                if run_until is not None:
+                    remaining = run_until - time.time()
+                    if remaining <= 0:
+                        return
+                    time.sleep(min(0.2, remaining))
+                else:
+                    time.sleep(0.2)
 
             if search_config.get('click_before_typing', True):
                 click_x = click_coordinates.get('x')
@@ -1250,22 +1342,47 @@ class UserBehaviorSimulator:
                 else:
                     click_search_field(screen_width // 2 - 120, screen_height // 2)
 
-                time.sleep(focus_pause)
+                if run_until is not None:
+                    remaining = run_until - time.time()
+                    if remaining <= 0:
+                        return
+                    time.sleep(min(focus_pause, remaining))
+                else:
+                    time.sleep(focus_pause)
 
             if tab_presses > 0:
                 for _ in range(tab_presses):
                     pyautogui.press('tab')
-                    time.sleep(0.2)
+                    if run_until is not None:
+                        remaining = run_until - time.time()
+                        if remaining <= 0:
+                            return
+                        time.sleep(min(0.2, remaining))
+                    else:
+                        time.sleep(0.2)
 
             if not search_config.get('click_before_typing', True) and tab_presses <= 0:
                 pyautogui.click(screen_width // 2, screen_height // 2)
-                time.sleep(focus_pause)
+                if run_until is not None:
+                    remaining = run_until - time.time()
+                    if remaining <= 0:
+                        return
+                    time.sleep(min(focus_pause, remaining))
+                else:
+                    time.sleep(focus_pause)
 
             typing_interval = float(search_config.get('typing_interval', 0.05))
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Typing query into focused field: {query}")
             pyautogui.write(query, interval=self.scale_duration(typing_interval))
 
-            time.sleep(float(search_config.get('post_type_pause', 0.5)))
+            post_type_pause = float(search_config.get('post_type_pause', 0.5))
+            if run_until is not None:
+                remaining = run_until - time.time()
+                if remaining <= 0:
+                    return
+                time.sleep(min(post_type_pause, remaining))
+            else:
+                time.sleep(post_type_pause)
 
             if search_config.get('press_enter', True):
                 pyautogui.press('enter')
@@ -1290,7 +1407,7 @@ class UserBehaviorSimulator:
 
             if scroll_time > 10:
                 initial_pause = random.randint(3, 8)
-                self.sleep_with_mouse_activity(initial_pause)
+                self.sleep_with_mouse_activity(initial_pause, run_until=run_until)
 
                 if run_until is not None and time.time() >= run_until:
                     return
@@ -1302,13 +1419,13 @@ class UserBehaviorSimulator:
 
                 remaining_time = reading_time - initial_pause - scroll_time
                 if remaining_time > 0:
-                    self.sleep_with_mouse_activity(remaining_time)
+                    self.sleep_with_mouse_activity(remaining_time, run_until=run_until)
             else:
-                self.sleep_with_mouse_activity(reading_time)
+                self.sleep_with_mouse_activity(reading_time, run_until=run_until)
         else:
-            self.sleep_with_mouse_activity(reading_time)
+            self.sleep_with_mouse_activity(reading_time, run_until=run_until)
 
-    def open_link_like_human(self, url):
+    def open_link_like_human(self, url, run_until=None):
         link_config = self.config.get('link_interaction', {}) or {}
 
         def parse_range(value, default_low, default_high):
@@ -1329,7 +1446,10 @@ class UserBehaviorSimulator:
         open_new_tab_probability = float(link_config.get('open_new_tab_probability', 0.65) or 0.65)
         open_new_tab_probability = max(0.0, min(1.0, open_new_tab_probability))
 
-        self.sleep_with_mouse_activity(random.uniform(pre_low, pre_high))
+        self.sleep_with_mouse_activity(random.uniform(pre_low, pre_high), run_until=run_until)
+
+        if run_until is not None and time.time() >= run_until:
+            return False
 
         if random.random() < open_new_tab_probability:
             webbrowser.open(url, new=2)
@@ -1338,7 +1458,7 @@ class UserBehaviorSimulator:
             webbrowser.open(url, new=0)
             opened_new_tab = False
 
-        self.sleep_with_mouse_activity(random.uniform(post_low, post_high))
+        self.sleep_with_mouse_activity(random.uniform(post_low, post_high), run_until=run_until)
         return opened_new_tab
 
     def browse_websites(self, skip_post_wait=False, run_until=None):
@@ -1387,16 +1507,16 @@ class UserBehaviorSimulator:
 
             try:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Opening main site: {main_site}")
-                self.open_link_like_human(main_site)
+                self.open_link_like_human(main_site, run_until=run_until)
 
-                self.sleep_with_mouse_activity(random.randint(4, 8))
+                self.sleep_with_mouse_activity(random.randint(4, 8), run_until=run_until)
 
                 links_per_website_range = self.config.get('links_per_website', [2, 6])
                 links_to_visit = random.randint(*links_per_website_range)
                 print(
                     f"[{datetime.now().strftime('%H:%M:%S')}] Finding {links_to_visit} additional links from {main_site}")
 
-                extracted_links = self.extract_links_from_page(main_site)
+                extracted_links = self.extract_links_from_page(main_site, run_until=run_until)
 
                 if extracted_links:
                     selected_links = random.sample(extracted_links, min(links_to_visit, len(extracted_links)))
@@ -1407,37 +1527,37 @@ class UserBehaviorSimulator:
 
                         try:
                             print(f"[{datetime.now().strftime('%H:%M:%S')}] Opening additional link: {link}")
-                            opened_new_tab = self.open_link_like_human(link)
+                            opened_new_tab = self.open_link_like_human(link, run_until=run_until)
 
-                            self.sleep_with_mouse_activity(random.randint(2, 5))
+                            self.sleep_with_mouse_activity(random.randint(2, 5), run_until=run_until)
 
                             link_explore_time_range = self.config.get('link_interaction', {}).get('explore_time_seconds', [15, 90])
                             link_explore_time = random.randint(*link_explore_time_range)
                             self.simulate_page_reading(link_explore_time, run_until=run_until)
-                            self.maybe_close_current_tab(opened_new_tab=opened_new_tab)
+                            self.maybe_close_current_tab(opened_new_tab=opened_new_tab, run_until=run_until)
 
                             max_crawl_depth = self.config.get('max_crawl_depth', 2)
                             if max_crawl_depth > 1:
-                                sub_links = self.extract_links_from_page(link)
+                                sub_links = self.extract_links_from_page(link, run_until=run_until)
                                 if sub_links:
                                     sub_link = random.choice(sub_links)
                                     if run_until is not None and time.time() >= run_until:
                                         break
 
                                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Opening sub-link: {sub_link}")
-                                    opened_new_tab = self.open_link_like_human(sub_link)
+                                    opened_new_tab = self.open_link_like_human(sub_link, run_until=run_until)
 
-                                    self.sleep_with_mouse_activity(random.randint(2, 4))
+                                    self.sleep_with_mouse_activity(random.randint(2, 4), run_until=run_until)
 
                                     sub_link_time_range = self.config.get('link_interaction', {}).get('explore_time_seconds', [10, 60])
                                     sub_link_time = random.randint(*sub_link_time_range)
                                     self.simulate_page_reading(sub_link_time, run_until=run_until)
-                                    self.maybe_close_current_tab(opened_new_tab=opened_new_tab)
+                                    self.maybe_close_current_tab(opened_new_tab=opened_new_tab, run_until=run_until)
 
                         except Exception:
                             pass
 
-                        self.sleep_with_mouse_activity(random.randint(5, 15))
+                        self.sleep_with_mouse_activity(random.randint(5, 15), run_until=run_until)
                 else:
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] No additional links found for {main_site}")
 
@@ -1445,23 +1565,23 @@ class UserBehaviorSimulator:
                 explore_time = random.randint(*explore_time_range)
                 self.simulate_page_reading(explore_time, run_until=run_until)
 
-                self.sleep_with_mouse_activity(random.randint(6, 12))
+                self.sleep_with_mouse_activity(random.randint(6, 12), run_until=run_until)
 
             except Exception:
                 pass
 
         def perform_search_round():
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Opening search page: {search_url}")
-            opened_new_tab = self.open_link_like_human(search_url)
+            opened_new_tab = self.open_link_like_human(search_url, run_until=run_until)
 
-            self.sleep_with_mouse_activity(random.randint(4, 8))
+            self.sleep_with_mouse_activity(random.randint(4, 8), run_until=run_until)
             search_queries = search_config.get('search_queries', [])
             if isinstance(search_queries, list) and search_queries:
                 query = str(random.choice(search_queries)).strip()
             else:
                 query = str(search_config.get('query', '')).strip()
 
-            self.interact_with_search_bar(query_override=query)
+            self.interact_with_search_bar(query_override=query, run_until=run_until)
 
             post_search_range = search_config.get('post_search_read_seconds', [20, 60])
             if isinstance(post_search_range, (list, tuple)) and len(post_search_range) == 2:
@@ -1470,7 +1590,7 @@ class UserBehaviorSimulator:
                 post_search_time = random.randint(20, 60)
 
             self.simulate_page_reading(post_search_time, run_until=run_until)
-            self.maybe_close_current_tab(opened_new_tab=opened_new_tab)
+            self.maybe_close_current_tab(opened_new_tab=opened_new_tab, run_until=run_until)
 
         for round_type, target_site in round_plan:
             if not self.is_running:
@@ -1494,7 +1614,7 @@ class UserBehaviorSimulator:
             if run_until is not None and time.time() >= run_until:
                 break
 
-            time.sleep(random.randint(3, 10))
+            self.sleep_with_mouse_activity(random.randint(3, 10), run_until=run_until)
 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Completed website browsing task")
         if not skip_post_wait and not self.config.get('scheduled_tasks', {}).get('enabled', False):
@@ -1540,7 +1660,15 @@ class UserBehaviorSimulator:
         )
 
         if task_name == 'browse_websites':
-            self.browse_websites(skip_post_wait=True, run_until=run_until)
+            self.module_stop_requested = False
+            web_stop_timer = threading.Timer(duration_seconds, self._request_web_module_stop)
+            web_stop_timer.daemon = True
+            web_stop_timer.start()
+            try:
+                self.browse_websites(skip_post_wait=True, run_until=run_until)
+            finally:
+                web_stop_timer.cancel()
+                self.module_stop_requested = False
             return True
 
         if task_name == 'browse_filesystem':
