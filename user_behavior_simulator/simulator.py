@@ -107,6 +107,12 @@ class UserBehaviorSimulator:
                 "typing_interval": 0.05,
                 "post_type_pause": 0.5
             },
+            "task_orchestration": {
+                "enabled": False,
+                "modules": ["browse_websites", "browse_filesystem"],
+                "initial_sequence": ["browse_websites", "browse_filesystem", "browse_websites"],
+                "module_duration_minutes": [1, 5]
+            },
             "link_interaction": {
                 "enabled": True,
                 "open_new_tab_probability": 0.65,
@@ -1311,7 +1317,7 @@ class UserBehaviorSimulator:
         self.sleep_with_mouse_activity(random.uniform(post_low, post_high))
         return opened_new_tab
 
-    def browse_websites(self):
+    def browse_websites(self, skip_post_wait=False, run_until=None):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Starting website browsing task")
         websites = self.config.get('websites', ['https://www.google.com'])
         search_config = self.config.get('search_interaction', {}) or {}
@@ -1352,6 +1358,9 @@ class UserBehaviorSimulator:
                     round_plan.append(('site', random.choice(site_pool) if site_pool else None))
 
         def explore_site(main_site):
+            if run_until is not None and time.time() >= run_until:
+                return
+
             try:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Opening main site: {main_site}")
                 self.open_link_like_human(main_site)
@@ -1369,6 +1378,9 @@ class UserBehaviorSimulator:
                     selected_links = random.sample(extracted_links, min(links_to_visit, len(extracted_links)))
 
                     for link in selected_links:
+                        if run_until is not None and time.time() >= run_until:
+                            break
+
                         try:
                             print(f"[{datetime.now().strftime('%H:%M:%S')}] Opening additional link: {link}")
                             opened_new_tab = self.open_link_like_human(link)
@@ -1385,6 +1397,9 @@ class UserBehaviorSimulator:
                                 sub_links = self.extract_links_from_page(link)
                                 if sub_links:
                                     sub_link = random.choice(sub_links)
+                                    if run_until is not None and time.time() >= run_until:
+                                        break
+
                                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Opening sub-link: {sub_link}")
                                     opened_new_tab = self.open_link_like_human(sub_link)
 
@@ -1437,6 +1452,9 @@ class UserBehaviorSimulator:
             if not self.is_running:
                 break
 
+            if run_until is not None and time.time() >= run_until:
+                break
+
             if round_type == 'search':
                 try:
                     perform_search_round()
@@ -1449,19 +1467,133 @@ class UserBehaviorSimulator:
             if not self.is_running:
                 break
 
+            if run_until is not None and time.time() >= run_until:
+                break
+
             time.sleep(random.randint(3, 10))
 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Completed website browsing task")
-        if not self.config.get('scheduled_tasks', {}).get('enabled', False):
+        if not skip_post_wait and not self.config.get('scheduled_tasks', {}).get('enabled', False):
             self.wait_between_tasks()
 
-    def browse_filesystem(self, skip_post_wait=False):
+    def browse_filesystem(self, skip_post_wait=False, run_until=None):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Starting filesystem exploration task")
         explorer = FilesystemExplorer(self)
-        explorer.explore()
+        explorer.explore(run_until=run_until)
 
         if not skip_post_wait and not self.config.get('scheduled_tasks', {}).get('enabled', False):
             self.wait_between_tasks()
+
+    def get_orchestration_config(self):
+        orchestration_config = self.config.get('task_orchestration', {}) or {}
+        modules = orchestration_config.get('modules', ['browse_websites', 'browse_filesystem'])
+        if not isinstance(modules, list) or not modules:
+            modules = ['browse_websites', 'browse_filesystem']
+
+        initial_sequence = orchestration_config.get(
+            'initial_sequence',
+            ['browse_websites', 'browse_filesystem', 'browse_websites']
+        )
+        if not isinstance(initial_sequence, list):
+            initial_sequence = ['browse_websites', 'browse_filesystem', 'browse_websites']
+
+        duration_range = orchestration_config.get('module_duration_minutes', [1, 5])
+        if not (isinstance(duration_range, (list, tuple)) and len(duration_range) == 2):
+            duration_range = [1, 5]
+
+        return {
+            'enabled': bool(orchestration_config.get('enabled', False)),
+            'modules': [str(name) for name in modules if name],
+            'initial_sequence': [str(name) for name in initial_sequence if name],
+            'module_duration_minutes': duration_range,
+        }
+
+    def run_module_for_duration(self, task_name, duration_minutes):
+        duration_seconds = max(0.0, float(duration_minutes) * 60.0)
+        run_until = time.time() + self.scale_duration(duration_seconds)
+        print(
+            f"[{datetime.now().strftime('%H:%M:%S')}] Orchestrating task '{task_name}' for {int(duration_minutes)} minute(s)"
+        )
+
+        if task_name == 'browse_websites':
+            self.browse_websites(skip_post_wait=True, run_until=run_until)
+            return True
+
+        if task_name == 'browse_filesystem':
+            self.browse_filesystem(skip_post_wait=True, run_until=run_until)
+            return True
+
+        return False
+
+    def run_orchestrated_modules(self, single_run=False):
+        orchestration_config = self.get_orchestration_config()
+        if not orchestration_config['enabled']:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Task orchestration is disabled in the configuration")
+            return False
+
+        if not self.is_running:
+            self.is_running = True
+
+        iteration = 0
+        modules = orchestration_config['modules']
+        initial_sequence = orchestration_config['initial_sequence']
+        duration_range = orchestration_config['module_duration_minutes']
+
+        if isinstance(duration_range, (list, tuple)) and len(duration_range) == 2:
+            min_minutes = max(1, int(duration_range[0]))
+            max_minutes = max(min_minutes, int(duration_range[1]))
+        else:
+            min_minutes = 1
+            max_minutes = 5
+
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Starting orchestrated module cycle")
+
+        while self.is_running:
+            self.wait_for_active_hours()
+
+            if not self.is_running:
+                break
+
+            session_duration_range = self.config.get('session_duration_minutes', [30, 90])
+            if isinstance(session_duration_range, (list, tuple)) and len(session_duration_range) == 2:
+                session_duration = random.randint(int(session_duration_range[0]), int(session_duration_range[1]))
+            else:
+                session_duration = random.randint(30, 90)
+
+            session_speed_multiplier = self.get_session_speed_multiplier()
+            session_end_time = datetime.now() + timedelta(minutes=session_duration / session_speed_multiplier)
+
+            print(
+                f"[{datetime.now().strftime('%H:%M:%S')}] Starting orchestrated session for {session_duration} minutes at {session_speed_multiplier}x speed"
+            )
+
+            while datetime.now() < session_end_time and self.is_running and self.is_within_active_hours():
+                if iteration < len(initial_sequence):
+                    task_name = initial_sequence[iteration]
+                else:
+                    task_name = random.choice(modules)
+
+                if task_name not in modules:
+                    task_name = random.choice(modules)
+
+                duration_minutes = random.randint(min_minutes, max_minutes)
+                self.run_module_for_duration(task_name, duration_minutes)
+                iteration += 1
+
+                if not self.is_running or datetime.now() >= session_end_time:
+                    break
+
+            if single_run:
+                break
+
+            if self.is_running:
+                session_break = random.randint(1800, 7200)
+                print(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] Orchestrated session break for {int(session_break / 60)} minutes"
+                )
+                time.sleep(session_break)
+
+        return True
 
     def run_filesystem_exploration(self):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Running continuous filesystem exploration task")
@@ -2457,6 +2589,7 @@ class UserBehaviorSimulator:
         task_methods = {
             'browse_websites': self.browse_websites,
             'browse_filesystem': self.browse_filesystem,
+            'orchestrate_modules': self.run_orchestrated_modules,
             'watch_youtube': self.watch_youtube,
             'create_text_files': self.create_text_files,
             'download_media': self.download_media,
@@ -2516,6 +2649,10 @@ class UserBehaviorSimulator:
 
     def random_behavior_cycle(self):
         print("Running in random mode")
+        if self.get_orchestration_config()['enabled']:
+            self.run_orchestrated_modules()
+            return
+
         while self.is_running:
             daily_sessions = self.config.get('daily_sessions', 3)
             for session in range(daily_sessions):

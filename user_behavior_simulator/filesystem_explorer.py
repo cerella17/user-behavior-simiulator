@@ -1,6 +1,7 @@
 import os
 import random
 import subprocess
+import time
 from datetime import datetime
 
 
@@ -9,7 +10,7 @@ class FilesystemExplorer:
         self.simulator = simulator
         self.config = simulator.config.get('filesystem_exploration', {}) or {}
 
-    def explore(self):
+    def explore(self, run_until=None):
         if not self.config.get('enabled', False):
             return
 
@@ -32,6 +33,9 @@ class FilesystemExplorer:
             if not self.simulator.is_running:
                 break
 
+            if run_until is not None and time.time() >= run_until:
+                break
+
             next_path = self.choose_next_path(current_path, roots)
             if not next_path:
                 current_path = random.choice(roots)
@@ -45,6 +49,9 @@ class FilesystemExplorer:
             self.maybe_scroll_file_manager()
             self.maybe_preview_file(current_path)
             self.close_opened_path_view()
+
+            if run_until is not None and time.time() >= run_until:
+                break
 
             if random.random() < float(self.config.get('go_up_probability', 0.25) or 0.25):
                 parent_path = os.path.dirname(current_path.rstrip(os.sep))

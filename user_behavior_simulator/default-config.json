@@ -114,6 +114,12 @@
     "typing_interval": 0.05,
     "post_type_pause": 0.5
   },
+  "task_orchestration": {
+    "enabled": false,
+    "modules": ["browse_websites", "browse_filesystem"],
+    "initial_sequence": ["browse_websites", "browse_filesystem", "browse_websites"],
+    "module_duration_minutes": [1, 5]
+  },
   "ftp_config": {
     "enabled": false,
     "servers": [
