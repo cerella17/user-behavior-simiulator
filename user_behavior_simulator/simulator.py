@@ -1059,7 +1059,7 @@ class UserBehaviorSimulator:
         except Exception:
             return []
 
-    def simulate_human_scrolling(self, duration):
+    def simulate_human_scrolling(self, duration, run_until=None):
         if not self.config.get('page_interaction', {}).get('scroll_enabled', False):
             return
 
@@ -1096,6 +1096,9 @@ class UserBehaviorSimulator:
 
             if scroll_pattern == "top_to_bottom":
                 while time.time() < end_time:
+                    if run_until is not None and time.time() >= run_until:
+                        break
+
                     if random.random() < 0.22:
                         scroll_amount = random.randint(20, 70) * scroll_speed * random.choice([-1, 1])
                     else:
@@ -1106,6 +1109,9 @@ class UserBehaviorSimulator:
 
             elif scroll_pattern == "bottom_to_top":
                 for _ in range(3):
+                    if run_until is not None and time.time() >= run_until:
+                        break
+
                     if time.time() >= end_time:
                         break
                     scroll_amount = random.randint(90, 220) * scroll_speed
@@ -1113,6 +1119,9 @@ class UserBehaviorSimulator:
                     time.sleep(random.uniform(0.8, 1.6))
 
                 while time.time() < end_time:
+                    if run_until is not None and time.time() >= run_until:
+                        break
+
                     if random.random() < 0.18:
                         scroll_amount = random.randint(25, 80) * scroll_speed
                     else:
@@ -1126,6 +1135,9 @@ class UserBehaviorSimulator:
                 time.sleep(random.uniform(1.0, 2.0))
 
                 while time.time() < end_time:
+                    if run_until is not None and time.time() >= run_until:
+                        break
+
                     direction = random.choice([-1, 1, 1])
                     scroll_amount = random.randint(20, 90) * scroll_speed * direction
                     pyautogui.scroll(scroll_amount, x=center_x, y=center_y)
@@ -1134,6 +1146,9 @@ class UserBehaviorSimulator:
 
             elif scroll_pattern == "random_sections":
                 while time.time() < end_time:
+                    if run_until is not None and time.time() >= run_until:
+                        break
+
                     scroll_amount = random.randint(-90, 90) * scroll_speed
                     pyautogui.scroll(scroll_amount, x=center_x, y=center_y)
                     pause_time = random.uniform(max(1.0, scroll_pause_range[0] * 0.7), max(2.2, scroll_pause_range[1] * 0.8))
@@ -1262,8 +1277,11 @@ class UserBehaviorSimulator:
         except Exception as e:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Search interaction error: {e}")
 
-    def simulate_page_reading(self, base_time):
+    def simulate_page_reading(self, base_time, run_until=None):
         reading_time = random.randint(int(base_time * 0.7), int(base_time * 1.3))
+
+        if run_until is not None and time.time() >= run_until:
+            return
 
         if self.config.get('page_interaction', {}).get('scroll_enabled', False):
             total_scroll_time_range = self.config.get('page_interaction', {}).get('total_scroll_time', [30, 120])
@@ -1274,7 +1292,13 @@ class UserBehaviorSimulator:
                 initial_pause = random.randint(3, 8)
                 self.sleep_with_mouse_activity(initial_pause)
 
-                self.simulate_human_scrolling(scroll_time)
+                if run_until is not None and time.time() >= run_until:
+                    return
+
+                self.simulate_human_scrolling(scroll_time, run_until=run_until)
+
+                if run_until is not None and time.time() >= run_until:
+                    return
 
                 remaining_time = reading_time - initial_pause - scroll_time
                 if remaining_time > 0:
@@ -1389,7 +1413,7 @@ class UserBehaviorSimulator:
 
                             link_explore_time_range = self.config.get('link_interaction', {}).get('explore_time_seconds', [15, 90])
                             link_explore_time = random.randint(*link_explore_time_range)
-                            self.simulate_page_reading(link_explore_time)
+                            self.simulate_page_reading(link_explore_time, run_until=run_until)
                             self.maybe_close_current_tab(opened_new_tab=opened_new_tab)
 
                             max_crawl_depth = self.config.get('max_crawl_depth', 2)
@@ -1407,7 +1431,7 @@ class UserBehaviorSimulator:
 
                                     sub_link_time_range = self.config.get('link_interaction', {}).get('explore_time_seconds', [10, 60])
                                     sub_link_time = random.randint(*sub_link_time_range)
-                                    self.simulate_page_reading(sub_link_time)
+                                    self.simulate_page_reading(sub_link_time, run_until=run_until)
                                     self.maybe_close_current_tab(opened_new_tab=opened_new_tab)
 
                         except Exception:
@@ -1419,7 +1443,7 @@ class UserBehaviorSimulator:
 
                 explore_time_range = self.config.get('explore_time_per_site', [30, 120])
                 explore_time = random.randint(*explore_time_range)
-                self.simulate_page_reading(explore_time)
+                self.simulate_page_reading(explore_time, run_until=run_until)
 
                 self.sleep_with_mouse_activity(random.randint(6, 12))
 
@@ -1445,7 +1469,7 @@ class UserBehaviorSimulator:
             else:
                 post_search_time = random.randint(20, 60)
 
-            self.simulate_page_reading(post_search_time)
+            self.simulate_page_reading(post_search_time, run_until=run_until)
             self.maybe_close_current_tab(opened_new_tab=opened_new_tab)
 
         for round_type, target_site in round_plan:
@@ -1510,7 +1534,7 @@ class UserBehaviorSimulator:
 
     def run_module_for_duration(self, task_name, duration_minutes):
         duration_seconds = max(0.0, float(duration_minutes) * 60.0)
-        run_until = time.time() + self.scale_duration(duration_seconds)
+        run_until = time.time() + duration_seconds
         print(
             f"[{datetime.now().strftime('%H:%M:%S')}] Orchestrating task '{task_name}' for {int(duration_minutes)} minute(s)"
         )
@@ -1520,6 +1544,7 @@ class UserBehaviorSimulator:
             return True
 
         if task_name == 'browse_filesystem':
+            self.config.setdefault('filesystem_exploration', {})['enabled'] = True
             self.browse_filesystem(skip_post_wait=True, run_until=run_until)
             return True
 

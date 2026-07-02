@@ -217,17 +217,11 @@ class FilesystemExplorer:
 
             runtime_os = self.simulator.detect_runtime_os()
             if runtime_os == 'Windows':
-                try:
-                    pyautogui.hotkey('ctrl', 'w')
-                except Exception:
-                    pyautogui.hotkey('alt', 'f4')
+                pyautogui.hotkey('ctrl', 'w')
             elif runtime_os == 'Darwin':
                 pyautogui.hotkey('command', 'w')
             else:
-                try:
-                    pyautogui.hotkey('ctrl', 'w')
-                except Exception:
-                    pyautogui.hotkey('alt', 'f4')
+                pyautogui.hotkey('ctrl', 'w')
 
             self.simulator.sleep_with_mouse_activity(random.uniform(0.3, 0.9))
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Closed filesystem view")
