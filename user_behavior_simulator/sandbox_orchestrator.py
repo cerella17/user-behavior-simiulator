@@ -198,6 +198,7 @@ class SandboxOrchestrator:
             raise RuntimeError("Sandbox orchestrator requires psutil. Install it with: pip install psutil")
 
         self.running = True
+        self.simulator.is_running = True
         self.simulator.detect_runtime_os()
         self.simulator.configure_session_speed()
         self.simulator.start_stop_hotkey_listener()
@@ -217,6 +218,7 @@ class SandboxOrchestrator:
 
     def stop(self):
         self.running = False
+        self.simulator.is_running = False
         if self.observer is not None:
             try:
                 self.observer.stop()
@@ -389,6 +391,8 @@ class SandboxOrchestrator:
         )
 
     def _scan_processes(self):
+        matched_groups: Dict[str, List[Tuple[int, str, str]]] = {}
+
         for proc in psutil.process_iter(attrs=["pid", "name", "exe", "cmdline", "cwd"]):
             try:
                 pid = proc.info.get("pid") or proc.pid
@@ -399,25 +403,42 @@ class SandboxOrchestrator:
                 if module_name is None:
                     continue
 
-                signature = f"proc:{pid}:{module_name}:{path}:{reason}"
-                if self._is_recent_signature(signature):
-                    continue
-
-                self.recent_signatures[signature] = time.monotonic()
-                self._queue_event(
-                    DetectedEvent(
-                        module_name=module_name,
-                        source="process-scan",
-                        reason=reason,
-                        path=path,
-                        process_name=str(proc.info.get("name") or proc.name() or ""),
-                        pid=pid,
-                    )
-                )
+                process_name = str(proc.info.get("name") or proc.name() or "")
+                matched_groups.setdefault(module_name, []).append((pid, process_name, path))
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
             except Exception as exc:
                 self.logger.info("Process classification error: %s", exc)
+
+        for module_name, matches in matched_groups.items():
+            if not matches:
+                continue
+
+            match_signature = ",".join(sorted(f"{pid}:{process_name}:{path}" for pid, process_name, path in matches))
+            signature = f"proc-group:{module_name}:{match_signature}"
+            if self._is_recent_signature(signature):
+                continue
+
+            self.recent_signatures[signature] = time.monotonic()
+            process_names = sorted({process_name for _, process_name, _ in matches if process_name})
+            pids = sorted({pid for pid, _, _ in matches})
+            paths = sorted({path for _, _, path in matches if path})
+            summary_process = ", ".join(process_names) if process_names else "multiple processes"
+            summary_path = ", ".join(paths[:3])
+            reason = f"matched {len(matches)} process(es): {summary_process}"
+            if summary_path:
+                reason = f"{reason} | paths: {summary_path}"
+
+            self._queue_event(
+                DetectedEvent(
+                    module_name=module_name,
+                    source="process-scan",
+                    reason=reason,
+                    path=summary_path,
+                    process_name=summary_process,
+                    pid=pids[0] if pids else 0,
+                )
+            )
 
     def _classify_process(self, proc) -> Tuple[Optional[str], str, str]:
         try:
@@ -509,7 +530,10 @@ class SandboxOrchestrator:
 
     def _path_is_monitored(self, path: str) -> bool:
         expanded = os.path.expanduser(path)
+        home_root = os.path.expanduser("~")
         for monitored in self.monitored_paths:
+            if monitored == home_root:
+                continue
             if expanded == monitored or expanded.startswith(monitored.rstrip(os.sep) + os.sep):
                 return True
         return False
