@@ -118,7 +118,7 @@
     "enabled": false,
     "modules": ["browse_websites", "browse_filesystem"],
     "initial_sequence": ["browse_websites", "browse_filesystem", "browse_websites"],
-    "module_duration_minutes": [1, 5]
+    "module_duration_minutes": [1, 3]
   },
   "ftp_config": {
     "enabled": false,

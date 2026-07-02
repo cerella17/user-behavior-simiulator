@@ -111,7 +111,7 @@ class UserBehaviorSimulator:
                 "enabled": False,
                 "modules": ["browse_websites", "browse_filesystem"],
                 "initial_sequence": ["browse_websites", "browse_filesystem", "browse_websites"],
-                "module_duration_minutes": [1, 5]
+                "module_duration_minutes": [1, 3]
             },
             "link_interaction": {
                 "enabled": True,
@@ -1499,7 +1499,7 @@ class UserBehaviorSimulator:
 
         duration_range = orchestration_config.get('module_duration_minutes', [1, 5])
         if not (isinstance(duration_range, (list, tuple)) and len(duration_range) == 2):
-            duration_range = [1, 5]
+            duration_range = [1, 3]
 
         return {
             'enabled': bool(orchestration_config.get('enabled', False)),
