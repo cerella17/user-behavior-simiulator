@@ -127,19 +127,49 @@
     "module_cooldown_seconds": [20, 60],
     "process_poll_interval_seconds": 4,
     "fallback_module": "random",
-    "monitored_paths": ["~/Desktop", "~/Documents", "~/Downloads", "~", "~/Library/Application Support/Firefox", "~/Library/Application Support/Google/Chrome", "~/Library/Application Support/BraveSoftware"],
+    "monitored_paths": [
+      "~/Desktop",
+      "~/Documents",
+      "~/Downloads",
+      "~",
+      "~/Library/Application Support/Firefox",
+      "~/Library/Application Support/Google/Chrome",
+      "~/Library/Application Support/BraveSoftware"
+    ],
     "rules": [
       {
         "module": "browse_websites",
         "priority": 100,
-        "process_keywords": ["firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi", "safari", "browser"],
+        "process_keywords": [
+          "firefox",
+          "chrome",
+          "chromium",
+          "brave",
+          "edge",
+          "opera",
+          "vivaldi",
+          "safari",
+          "browser"
+        ],
         "path_keywords": ["firefox", "chrome", "chromium", "browser", "mozilla", "safari", "brave"],
-        "path_prefixes": ["~/Library/Application Support/Firefox", "~/Library/Application Support/Google/Chrome", "~/Library/Application Support/BraveSoftware"]
+        "path_prefixes": [
+          "~/Library/Application Support/Firefox",
+          "~/Library/Application Support/Google/Chrome",
+          "~/Library/Application Support/BraveSoftware"
+        ]
       },
       {
         "module": "browse_filesystem",
         "priority": 10,
-        "process_keywords": ["finder", "nautilus", "dolphin", "thunar", "pcmanfm", "file manager", "files"],
+        "process_keywords": [
+          "finder",
+          "nautilus",
+          "dolphin",
+          "thunar",
+          "pcmanfm",
+          "file manager",
+          "files"
+        ],
         "path_keywords": ["desktop", "documents", "downloads", "home", "folder"],
         "path_prefixes": ["~/Desktop", "~/Documents", "~/Downloads", "~"]
       }
