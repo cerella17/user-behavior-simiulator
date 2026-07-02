@@ -3,6 +3,7 @@ __author__ = "AmirHossein Ahmadnejad Roudsari"
 __email__ = "amirhahm@yorku.ca"
 
 from .filesystem_explorer import FilesystemExplorer
+from .sandbox_orchestrator import SandboxOrchestrator, ModuleRoute, DetectedEvent
 from .simulator import UserBehaviorSimulator
 
-__all__ = ["UserBehaviorSimulator", "FilesystemExplorer"]
+__all__ = ["UserBehaviorSimulator", "FilesystemExplorer", "SandboxOrchestrator", "ModuleRoute", "DetectedEvent"]

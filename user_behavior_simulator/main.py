@@ -2,6 +2,7 @@ import sys
 import argparse
 import os
 from .simulator import UserBehaviorSimulator
+from .sandbox_orchestrator import SandboxOrchestrator
 
 def main():
     parser = argparse.ArgumentParser(description='User Behavior Simulator')
@@ -10,6 +11,9 @@ def main():
                        help='Path to configuration file (default: config.json)')
     parser.add_argument('--task',
                        help='Run a single task and exit (for example: browse_filesystem)')
+    parser.add_argument('--sandbox-orchestrator',
+                       action='store_true',
+                       help='Run the continuous sandbox orchestrator')
     parser.add_argument('-v', '--version', 
                        action='version', 
                        version='User Behavior Simulator 1.0.0')
@@ -39,6 +43,11 @@ def main():
     
     try:
         simulator = UserBehaviorSimulator(args.config)
+
+        if args.sandbox_orchestrator or args.task == 'sandbox_orchestrator' or args.task == 'orchestrate_modules':
+            sandbox_orchestrator = SandboxOrchestrator(simulator)
+            sandbox_orchestrator.start()
+            return
 
         if args.task:
             simulator.configure_session_speed()

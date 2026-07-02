@@ -2615,6 +2615,7 @@ class UserBehaviorSimulator:
             'browse_websites': self.browse_websites,
             'browse_filesystem': self.browse_filesystem,
             'orchestrate_modules': self.run_orchestrated_modules,
+            'sandbox_orchestrator': self.run_orchestrated_modules,
             'watch_youtube': self.watch_youtube,
             'create_text_files': self.create_text_files,
             'download_media': self.download_media,

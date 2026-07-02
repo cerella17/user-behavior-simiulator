@@ -120,6 +120,31 @@
     "initial_sequence": ["browse_websites", "browse_filesystem", "browse_websites"],
     "module_duration_minutes": [1, 3]
   },
+  "sandbox_orchestrator": {
+    "enabled": false,
+    "idle_timeout_seconds": 120,
+    "trigger_delay_seconds": [8, 25],
+    "module_cooldown_seconds": [20, 60],
+    "process_poll_interval_seconds": 4,
+    "fallback_module": "random",
+    "monitored_paths": ["~/Desktop", "~/Documents", "~/Downloads", "~", "~/Library/Application Support/Firefox", "~/Library/Application Support/Google/Chrome", "~/Library/Application Support/BraveSoftware"],
+    "rules": [
+      {
+        "module": "browse_websites",
+        "priority": 100,
+        "process_keywords": ["firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi", "safari", "browser"],
+        "path_keywords": ["firefox", "chrome", "chromium", "browser", "mozilla", "safari", "brave"],
+        "path_prefixes": ["~/Library/Application Support/Firefox", "~/Library/Application Support/Google/Chrome", "~/Library/Application Support/BraveSoftware"]
+      },
+      {
+        "module": "browse_filesystem",
+        "priority": 10,
+        "process_keywords": ["finder", "nautilus", "dolphin", "thunar", "pcmanfm", "file manager", "files"],
+        "path_keywords": ["desktop", "documents", "downloads", "home", "folder"],
+        "path_prefixes": ["~/Desktop", "~/Documents", "~/Downloads", "~"]
+      }
+    ]
+  },
   "ftp_config": {
     "enabled": false,
     "servers": [
